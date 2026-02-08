@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ระบบเช็คชื่อ</title>
+</head>
+<body>
+
+<h2 id="title">ระบบเช็คชื่อ</h2>
+
+<!-- LOGIN -->
+<div id="login">
+  <input id="email" placeholder="อีเมล">
+  <input id="password" placeholder="รหัสผ่าน" type="password">
+  <button onclick="login()">เข้าสู่ระบบ</button>
+</div>
+
+<!-- STUDENT -->
+<div id="student" style="display:none;">
+  <h3>นักเรียน</h3>
+  <input id="sname" placeholder="ชื่อ">
+  <input id="sid" placeholder="เลขนักเรียน">
+  <input id="classId" placeholder="รหัส / QR ครู">
+  <button onclick="checkIn()">เช็คชื่อ</button>
+  <button id="lateBtn" onclick="late()" style="display:none;">สาย</button>
+</div>
+
+<!-- TEACHER -->
+<div id="teacher" style="display:none;">
+  <h3>ครู</h3>
+  <input id="subject" placeholder="ชื่อวิชา">
+  <button onclick="openClass()">เปิดคาบ + สร้าง QR</button>
+  <p id="qr"></p>
+</div>
+
+<!-- ADMIN -->
+<div id="admin" style="display:none;">
+  <h3>Admin</h3>
+  <button onclick="closeSystem()">ปิดระบบทั้งหมด</button>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
