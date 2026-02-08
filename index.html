@@ -1,44 +1,220 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
 <meta charset="utf-8">
-<title>ระบบเช็คชื่อ</title>
+<title>ระบบเช็คชื่อ QR (ครบ + Excel)</title>
+<style>
+body{font-family:sans-serif}
+section{display:none;margin-top:20px}
+video{width:280px;border:1px solid #ccc}
+table{border-collapse:collapse;width:100%;margin-top:10px}
+td,th{border:1px solid #ccc;padding:6px;text-align:center}
+button{margin:4px}
+</style>
 </head>
 <body>
 
-<h2 id="title">ระบบเช็คชื่อ</h2>
+<h2>ระบบเช็คชื่อเข้าเรียน</h2>
 
 <!-- LOGIN -->
-<div id="login">
-  <input id="email" placeholder="อีเมล">
-  <input id="password" placeholder="รหัสผ่าน" type="password">
+<section id="login" style="display:block">
+  <input id="email" placeholder="อีเมล"><br>
+  <input id="password" type="password" placeholder="รหัสผ่าน"><br>
   <button onclick="login()">เข้าสู่ระบบ</button>
-</div>
+</section>
 
 <!-- STUDENT -->
-<div id="student" style="display:none;">
+<section id="student">
   <h3>นักเรียน</h3>
   <input id="sname" placeholder="ชื่อ">
-  <input id="sid" placeholder="เลขนักเรียน">
-  <input id="classId" placeholder="รหัส / QR ครู">
-  <button onclick="checkIn()">เช็คชื่อ</button>
+  <input id="sid" placeholder="เลขนักเรียน"><br><br>
+
+  <video id="video" autoplay></video><br>
+  <button onclick="startScan()">เปิดกล้องสแกน QR</button><br><br>
+
   <button id="lateBtn" onclick="late()" style="display:none;">สาย</button>
-</div>
+</section>
 
 <!-- TEACHER -->
-<div id="teacher" style="display:none;">
+<section id="teacher">
   <h3>ครู</h3>
-  <input id="subject" placeholder="ชื่อวิชา">
+  <input id="subject" placeholder="วิชา">
+  <input id="room" placeholder="ห้อง">
   <button onclick="openClass()">เปิดคาบ + สร้าง QR</button>
-  <p id="qr"></p>
-</div>
+
+  <p><b>QR Code</b></p>
+  <img id="qrImg"><br>
+  <small id="qrText"></small>
+
+  <h4>รายชื่อเข้าเรียน</h4>
+  <button onclick="exportExcel()">📥 Export Excel</button>
+
+  <table id="table">
+    <tr><th>ชื่อ</th><th>เลข</th><th>สถานะ</th><th>เวลา</th></tr>
+  </table>
+</section>
 
 <!-- ADMIN -->
-<div id="admin" style="display:none;">
+<section id="admin">
   <h3>Admin</h3>
   <button onclick="closeSystem()">ปิดระบบทั้งหมด</button>
-</div>
+</section>
 
-<script type="module" src="app.js"></script>
+<script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, addDoc,
+  collection, query, where, onSnapshot,
+  serverTimestamp, Timestamp
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+/* ===== CONFIG ===== */
+const firebaseConfig = {
+  apiKey: "API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  projectId: "PROJECT"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let classIdGlobal = null;
+let attendanceCache = [];
+
+/* ===== LOGIN ===== */
+window.login = async () => {
+  const res = await signInWithEmailAndPassword(auth,email.value,password.value);
+  const snap = await getDoc(doc(db,"users",res.user.uid));
+  const role = snap.data().role;
+
+  login.style.display="none";
+  if(role==="student") student.style.display="block";
+  if(role==="teacher") teacher.style.display="block";
+  if(role==="admin") admin.style.display="block";
+};
+
+/* ===== STUDENT ===== */
+window.startScan = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+  video.srcObject = stream;
+
+  const canvas=document.createElement("canvas");
+  const ctx=canvas.getContext("2d");
+
+  const scan=()=>{
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    ctx.drawImage(video,0,0);
+    const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const code=jsQR(img.data,img.width,img.height);
+    if(code){
+      classIdGlobal=code.data;
+      stream.getTracks().forEach(t=>t.stop());
+      checkIn();
+      return;
+    }
+    requestAnimationFrame(scan);
+  };
+  scan();
+};
+
+async function checkIn(){
+  const ref=doc(db,"classes",classIdGlobal);
+  const snap=await getDoc(ref);
+  if(!snap.exists()) return alert("QR ไม่ถูกต้อง");
+
+  const data=snap.data();
+  if(Date.now()>data.qrExpireAt.toMillis()){
+    lateBtn.style.display="block";
+    return alert("หมดเวลา");
+  }
+
+  await addDoc(collection(db,"attendance"),{
+    classId:classIdGlobal,
+    name:sname.value,
+    sid:sid.value,
+    status:"มาเรียน",
+    time:serverTimestamp()
+  });
+  alert("เช็คชื่อแล้ว");
+}
+
+window.late=async()=>{
+  await addDoc(collection(db,"attendance"),{
+    classId:classIdGlobal,
+    name:sname.value,
+    sid:sid.value,
+    status:"สาย",
+    time:serverTimestamp()
+  });
+  alert("บันทึกสายแล้ว");
+};
+
+/* ===== TEACHER ===== */
+window.openClass = async () => {
+  classIdGlobal = Date.now().toString();
+  await setDoc(doc(db,"classes",classIdGlobal),{
+    subject:subject.value,
+    room:room.value,
+    qrExpireAt:Timestamp.fromMillis(Date.now()+5*60*1000),
+    isActive:true
+  });
+
+  QRCode.toDataURL(classIdGlobal,(err,url)=>{
+    qrImg.src=url;
+    qrText.innerText="รหัสคาบ: "+classIdGlobal;
+  });
+
+  loadAttendance();
+};
+
+function loadAttendance(){
+  const q=query(collection(db,"attendance"),where("classId","==",classIdGlobal));
+  onSnapshot(q,(snap)=>{
+    attendanceCache=[];
+    table.innerHTML="<tr><th>ชื่อ</th><th>เลข</th><th>สถานะ</th><th>เวลา</th></tr>";
+    snap.forEach(d=>{
+      const a=d.data();
+      attendanceCache.push(a);
+      table.innerHTML+=`<tr>
+        <td>${a.name}</td>
+        <td>${a.sid}</td>
+        <td>${a.status}</td>
+        <td>${a.time?.toDate().toLocaleTimeString()}</td>
+      </tr>`;
+    });
+  });
+}
+
+/* ===== EXPORT EXCEL ===== */
+window.exportExcel = () => {
+  if(attendanceCache.length===0) return alert("ยังไม่มีข้อมูล");
+
+  const data = attendanceCache.map(a=>({
+    ชื่อ: a.name,
+    เลขนักเรียน: a.sid,
+    สถานะ: a.status,
+    เวลา: a.time?.toDate().toLocaleTimeString()
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "เช็คชื่อ");
+
+  XLSX.writeFile(wb, "attendance.xlsx");
+};
+
+/* ===== ADMIN ===== */
+window.closeSystem = async () => {
+  await setDoc(doc(db,"systemConfig","main"),{systemOpen:false});
+  alert("ปิดระบบแล้ว");
+};
+</script>
 </body>
 </html>
