@@ -1,0 +1,90 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, addDoc,
+  collection, serverTimestamp, Timestamp
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  projectId: "PROJECT"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* ===== LOGIN ===== */
+window.login = async () => {
+  const user = await signInWithEmailAndPassword(
+    auth, email.value, password.value
+  );
+
+  const snap = await getDoc(doc(db, "users", user.user.uid));
+  const role = snap.data().role;
+
+  login.style.display = "none";
+
+  if (role === "student") student.style.display = "block";
+  if (role === "teacher") teacher.style.display = "block";
+  if (role === "admin") admin.style.display = "block";
+};
+
+/* ===== STUDENT ===== */
+window.checkIn = async () => {
+  const ref = doc(db, "classes", classId.value);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) return alert("QR ไม่ถูกต้อง");
+
+  const data = snap.data();
+  if (Date.now() > data.qrExpireAt.toMillis()) {
+    lateBtn.style.display = "block";
+    return alert("หมดเวลา");
+  }
+
+  await addDoc(collection(db, "attendance"), {
+    classId: classId.value,
+    name: sname.value,
+    sid: sid.value,
+    status: "present",
+    time: serverTimestamp()
+  });
+
+  alert("เช็คชื่อแล้ว");
+};
+
+window.late = async () => {
+  await addDoc(collection(db, "attendance"), {
+    classId: classId.value,
+    name: sname.value,
+    sid: sid.value,
+    status: "late",
+    time: serverTimestamp()
+  });
+  alert("บันทึกสายแล้ว");
+};
+
+/* ===== TEACHER ===== */
+window.openClass = async () => {
+  const classId = Date.now().toString();
+  await setDoc(doc(db, "classes", classId), {
+    subject: subject.value,
+    qrExpireAt: Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
+    allowLate: true,
+    isActive: true
+  });
+
+  qr.innerText = "รหัส / QR: " + classId;
+};
+
+/* ===== ADMIN ===== */
+window.closeSystem = async () => {
+  await setDoc(doc(db, "systemConfig", "main"), {
+    systemOpen: false
+  });
+  alert("ปิดระบบแล้ว");
+};
