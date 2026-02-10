@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>สถานะการอนุญาต 💌</title>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #f0f8ff;
+    display: flex;
+    height: 100vh;
+    justify-content: center;
+    align-items: center;
+  }
+  .box {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    width: 300px;
+  }
+  .ok { color: green; font-size: 24px; }
+  .no { color: red; font-size: 24px; }
+</style>
+</head>
+<body>
+
+<div class="box">
+  <h2>ผลการขออนุญาต 💕</h2>
+  <p id="status">ยังไม่มีการตัดสินใจ</p>
+</div>
+
+<script>
+const status = localStorage.getItem("permissionStatus");
+
+if (status === "อนุญาต") {
+  document.getElementById("status").innerHTML =
+    "✅ อนุญาตแล้ว ไปได้เลย 😍";
+  document.getElementById("status").className = "ok";
+} else if (status === "ไม่อนุญาต") {
+  document.getElementById("status").innerHTML =
+    "❌ ไม่อนุญาต อยู่กับแฟน 🥰";
+  document.getElementById("status").className = "no";
+}
+</script>
+
+</body>
+</html>
